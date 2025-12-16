@@ -30,53 +30,81 @@ public class GameService {
     private static final int MAX_INTENTOS = 7;
     private static final int PUNTOS_PALABRA_COMPLETA = 20;
     private static final int PUNTOS_POR_LETRA = 1;
-    
+
     @Transactional
     public GameResponseDTO startGame(Long playerId) {
-        GameResponseDTO response = new GameResponseDTO();
-        // TODO: Implementar el método startGame
         // Validar que el jugador existe
-       
-        // Verificar si ya existe una partida en curso para este jugador y palabra
-        
-        // Marcar la palabra como utilizada
-       
-        // Crear nueva partida en curso
-        
-        return response;
+        Player player = playerRepository.findById(playerId)
+                .orElseThrow(() -> new RuntimeException("No se encontró el jugador."));
+
+        Word word = wordRepository.findRandomWord()
+                .orElseThrow(() -> new RuntimeException("No hay palabras disponibles."));
+
+        // Verificar si ya existe una partida en curso para este jugador y esta palabra
+        Optional<GameInProgress> existing = gameInProgressRepository.findByJugadorAndPalabra(playerId, word.getId());
+
+        GameInProgress game;
+        if (existing.isPresent()) {
+            game = existing.get();
+        } else {
+            // Marcar la palabra como utilizada
+            word.setUtilizada(true);
+            wordRepository.save(word);
+
+            // Crear nueva partida en curso
+            game = new GameInProgress();
+            game.setJugador(player);
+            game.setPalabra(word);
+            game.setLetrasIntentadas("");
+            game.setIntentosRestantes(MAX_INTENTOS);
+            game.setFechaInicio(LocalDateTime.now());
+            game = gameInProgressRepository.save(game);
+        }
+        return buildResponseFromGameInProgress(game);
     }
-    
+
     @Transactional
     public GameResponseDTO makeGuess(Long playerId, Character letra) {
-        GameResponseDTO response = new GameResponseDTO();
-        // TODO: Implementar el método makeGuess
         // Validar que el jugador existe
+        Player player = playerRepository.findById(playerId)
+                .orElseThrow(() -> new RuntimeException("No se encontró el jugador."));
 
-        // Convertir la letra a mayúscula
-        
         // Buscar la partida en curso más reciente del jugador
-        
-        // Tomar la partida más reciente
-        
-        // Obtener letras ya intentadas
-        
-        // Verificar si la letra ya fue intentada
-        
-        // Agregar la nueva letra
-        
-        // Verificar si la letra está en la palabra
-        
-        // Decrementar intentos solo si la letra es incorrecta
-        
-        // Generar palabra oculta
-        
-        // Guardar el estado actualizado
-        
-        // Si el juego terminó, guardar en Game y eliminar de GameInProgress
-        
-        // Construir respuesta
-        
-        return response;
+        List<GameInProgress> games = gameInProgressRepository.findByJugadorIdOrderByFechaInicioDesc(playerId);
+        if (games.isEmpty()) {
+            throw new RuntimeException("No hay partida en curso para este jugador.");
+        }
+        GameInProgress game = games.get(0);
+
+        // Letra a mayúsculas
+        letra = Character.toUpperCase(letra);
+
+        String palabraStr = game.getPalabra().getPalabra().toUpperCase();
+        Set<Character> intentadas = stringToCharSet(game.getLetrasIntentadas());
+
+        // Verificar si la letra ya fue intentada para evitar guardados innecesarios
+        if (!intentadas.contains(letra)) {
+            intentadas.add(letra);
+            game.setLetrasIntentadas(charSetToString(intentadas));
+
+            // Decrementar intentos si la letra es incorrecta
+            if (palabraStr.indexOf(letra) == -1) {
+                game.setIntentosRestantes(game.getIntentosRestantes() - 1);
+            }
+
+            GameResponseDTO response = buildResponseFromGameInProgress(game);
+
+            // Si el juego terminó guardar y limpiar
+            if (response.getPalabraCompleta() || game.getIntentosRestantes() <= 0) {
+                saveGame(player, game.getPalabra(), response.getPalabraCompleta(), response.getPuntajeAcumulado());
+                gameInProgressRepository.delete(game);
+            } else {
+                gameInProgressRepository.save(game);
+            }
+            return response;
+        }
+
+        return buildResponseFromGameInProgress(game);
     }
     
     private GameResponseDTO buildResponseFromGameInProgress(GameInProgress gameInProgress) {

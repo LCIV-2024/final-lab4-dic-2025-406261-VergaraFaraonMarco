@@ -10,6 +10,7 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
@@ -38,14 +39,27 @@ class WordServiceTest {
 
     @Test
     void testGetAllWords() {
-        // TODO: Implementar el test para getAllWords
-        
+
+        when(wordRepository.findAllOrdered()).thenReturn(Arrays.asList(word1, word2, word3));
+
+        List<WordDTO> result = wordService.getAllWords();
+
+        assertEquals(3, result.size());
+        assertEquals("PROGRAMADOR", result.get(0).getPalabra());
+        verify(wordRepository, times(1)).findAllOrdered();
     }
 
     @Test
     void testGetAllWords_EmptyList() {
-        // TODO: Implementar el test para getAllWords_EmptyList
-        
+
+        when(wordRepository.findAllOrdered()).thenReturn(new ArrayList<>());
+
+        List<WordDTO> result = wordService.getAllWords();
+
+        assertNotNull(result);
+        assertTrue(result.isEmpty());
+        assertEquals(0, result.size());
+        verify(wordRepository, times(1)).findAllOrdered();
     }
 }
 
